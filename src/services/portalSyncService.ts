@@ -4,22 +4,70 @@ import { collection, query, where, getDocs, setDoc, doc } from 'firebase/firesto
 
 export const portalSyncService = {
   async sendOTP(mobile: string, provider: string) {
-    console.log(`Requesting OTP for ${mobile} via ${provider}`);
-    // Simulate API call
-    return new Promise((resolve) => setTimeout(resolve, 1500));
+    const response = await fetch('/api/sync/otp-request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mobile, provider }),
+    });
+    if (!response.ok) throw new Error('Automation server failed to request OTP');
+    return response.json();
   },
 
   async syncWithCredentials(username: string, providerId: string) {
-    console.log(`Syncing with credentials: ${username} for provider ${providerId}`);
+    // Similarly update credentials flow if implemented on backend
     return this.performSync('credentials', username, providerId);
   },
 
   async verifyOTPAndSync(mobile: string, otp: string, providerId: string) {
-    console.log(`Verifying OTP ${otp} for ${mobile} on provider ${providerId}`);
-    if (otp !== '123456') {
-      throw new Error('Invalid OTP. Please use the code shown in the test alert (123456).');
+    // Get provider details first to pass to backend
+    const provider = await firestoreService.getOne<any>('providers', providerId);
+    
+    const response = await fetch('/api/sync/verify-and-fetch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        mobile, 
+        otp, 
+        providerId, 
+        providerName: provider?.name || 'Unknown' 
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Automation failed');
     }
-    return this.performSync('mobile', mobile, providerId);
+
+    const { data: discovered } = await response.json();
+    const userId = auth.currentUser?.uid;
+
+    if (!userId) throw new Error('User not authenticated');
+
+    // Save discovered plans
+    for (const plan of discovered.plans) {
+      await firestoreService.create('plans', plan);
+    }
+
+    // Save discovered locations
+    for (const loc of discovered.locations) {
+      // Find the associated plan
+      const plans = await firestoreService.getAll<any>('plans', [
+        where('name', '==', discovered.plans[0].name),
+        where('providerId', '==', providerId)
+      ]);
+      const syncedPlan = plans[0];
+
+      await firestoreService.create('locations', {
+        ...loc,
+        userId,
+        planId: syncedPlan?.id
+      });
+    }
+
+    return {
+      locationsSynced: discovered.locations.length,
+      plansUpdated: discovered.plans.length,
+    };
   },
 
   async performSync(authType: 'credentials' | 'mobile', authValue: string, providerId: string) {
