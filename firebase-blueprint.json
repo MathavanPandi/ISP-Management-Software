@@ -1,0 +1,129 @@
+{
+  "entities": {
+    "Profile": {
+      "title": "User Profile",
+      "description": "Information about a portal user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "fullName": { "type": "string" },
+        "email": { "type": "string" },
+        "roleId": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "email", "createdAt", "updatedAt"]
+    },
+    "ISPProvider": {
+      "title": "ISP Provider",
+      "description": "ISP company information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "supportContact": { "type": "string" },
+        "portalUrl": { "type": "string" },
+        "logo": { "type": "string" }
+      },
+      "required": ["id", "name", "supportContact"]
+    },
+    "ISPPlan": {
+      "title": "ISP Plan",
+      "description": "Specific internet plan details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "providerId": { "type": "string" },
+        "name": { "type": "string" },
+        "bandwidth": { "type": "string" },
+        "amount": { "type": "number" },
+        "billingCycle": { "type": "string", "enum": ["Monthly", "Quarterly", "Half-Yearly", "Yearly"] }
+      },
+      "required": ["id", "providerId", "name", "bandwidth", "amount", "billingCycle"]
+    },
+    "Location": {
+      "title": "Location",
+      "description": "Business location with internet connection",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "branchType": { "type": "string" },
+        "city": { "type": "string" },
+        "state": { "type": "string" },
+        "address": { "type": "string" },
+        "ispProviderId": { "type": "string" },
+        "connectionType": { "type": "string" },
+        "planId": { "type": "string" },
+        "bandwidth": { "type": "string" },
+        "amount": { "type": "number" },
+        "billingCycle": { "type": "string" },
+        "lastRechargeDate": { "type": "string" },
+        "nextDueDate": { "type": "string" },
+        "daysRemaining": { "type": "number" },
+        "accountId": { "type": "string" },
+        "registeredMobile": { "type": "string" },
+        "registeredEmail": { "type": "string" },
+        "loginId": { "type": "string" },
+        "paymentMode": { "type": "string" },
+        "autoPay": { "type": "boolean" },
+        "status": { "type": "string" },
+        "contactPerson": { "type": "string" },
+        "adminOwner": { "type": "string" },
+        "priority": { "type": "string" },
+        "criticality": { "type": "string" },
+        "backupAvailable": { "type": "boolean" },
+        "remarks": { "type": "string" },
+        "userId": { "type": "string", "description": "The user who owns this location" }
+      },
+      "required": ["id", "name", "ispProviderId", "planId", "userId"]
+    },
+    "RechargeTransaction": {
+      "title": "Recharge Transaction",
+      "description": "History of internet recharges",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "locationId": { "type": "string" },
+        "amount": { "type": "number" },
+        "tax": { "type": "number" },
+        "total": { "type": "number" },
+        "rechargeDate": { "type": "string" },
+        "validUntil": { "type": "string" },
+        "paymentMode": { "type": "string" },
+        "paymentStatus": { "type": "string" },
+        "transactionId": { "type": "string" },
+        "bankReference": { "type": "string" },
+        "gatewayName": { "type": "string" },
+        "proofUrl": { "type": "string" },
+        "settlementStatus": { "type": "string" },
+        "remarks": { "type": "string" },
+        "initiatedBy": { "type": "string" }
+      },
+      "required": ["id", "locationId", "amount", "total", "rechargeDate", "initiatedBy"]
+    }
+  },
+  "firestore": {
+    "profiles": {
+      "schema": "Profile",
+      "description": "User profiles"
+    },
+    "providers": {
+      "schema": "ISPProvider",
+      "description": "Global list of ISP providers"
+    },
+    "plans": {
+      "schema": "ISPPlan",
+      "description": "Global list of available plans"
+    },
+    "locations": {
+      "schema": "Location",
+      "description": "User specific business locations"
+    },
+    "recharges": {
+      "schema": "RechargeTransaction",
+      "description": "History of all recharges"
+    }
+  }
+}

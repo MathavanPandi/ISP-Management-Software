@@ -1,0 +1,85 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helper Functions ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'it@mizaj.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isDataOwner() {
+      return isSignedIn() && (request.resource.data.userId == request.auth.uid || resource.data.userId == request.auth.uid);
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // --- Validation Helpers ---
+
+    function isValidProfile(data) {
+      return data.keys().hasAll(['id', 'email', 'createdAt', 'updatedAt']) 
+        && data.id == request.auth.uid
+        && data.email is string && data.email.size() <= 200
+        && data.fullName is string && data.fullName.size() <= 100;
+    }
+
+    function isValidLocation(data) {
+      return data.keys().hasAll(['id', 'name', 'ispProviderId', 'planId', 'userId'])
+        && data.userId == request.auth.uid
+        && data.name is string && data.name.size() <= 100
+        && data.priority in ['High', 'Medium', 'Low'];
+    }
+
+    // --- Collection Rules ---
+
+    // 1. Profiles
+    match /profiles/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidProfile(request.resource.data);
+      allow update: if isOwner(userId) || isAdmin();
+    }
+
+    // 2. Providers
+    match /providers/{providerId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // 3. Plans
+    match /plans/{planId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // 4. Locations
+    match /locations/{locationId} {
+      allow list, get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && (request.resource.data.userId == request.auth.uid || isAdmin());
+      allow update, delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // 5. Recharges
+    match /recharges/{rechargeId} {
+      allow list, get: if isSignedIn() && (resource.data.initiatedBy == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && (request.resource.data.initiatedBy == request.auth.uid || isAdmin());
+      allow update, delete: if isSignedIn() && (resource.data.initiatedBy == request.auth.uid || isAdmin());
+    }
+  }
+}

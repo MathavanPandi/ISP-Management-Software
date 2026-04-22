@@ -1,6 +1,14 @@
 import React from 'react';
 import { Lock, User, ShieldCheck, ArrowRight, AlertCircle } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { auth } from '../lib/firebase';
+import { firestoreService } from '../lib/firestoreService';
+import { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  updateProfile,
+  signInWithPopup,
+  GoogleAuthProvider
+} from 'firebase/auth';
 
 interface LoginProps {
   onLogin: () => void;
@@ -15,6 +23,20 @@ export function Login({ onLogin }: LoginProps) {
   const [error, setError] = React.useState<string | null>(null);
   const [message, setMessage] = React.useState<string | null>(null);
 
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+      onLogin();
+    } catch (err: any) {
+      setError(err.message || 'Google login failed.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -23,30 +45,26 @@ export function Login({ onLogin }: LoginProps) {
 
     try {
       if (isSignUp) {
-        const { error, data } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              full_name: fullName,
-            }
-          }
-        });
-
-        if (error) throw error;
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         
-        if (data?.user && data.session) {
-          onLogin();
-        } else {
-          setMessage('Check your email for the confirmation link!');
-        }
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
+        // Create the Profile document in Firestore
+        await firestoreService.create('profiles', {
+          id: userCredential.user.uid,
+          email: email,
+          fullName: fullName || 'Admin User',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
         });
 
-        if (error) throw error;
+        if (fullName) {
+          await updateProfile(userCredential.user, {
+            displayName: fullName
+          });
+        }
+        
+        onLogin();
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
         onLogin();
       }
     } catch (err: any) {

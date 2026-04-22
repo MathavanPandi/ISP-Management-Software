@@ -1,69 +1,51 @@
-import { supabase } from '../lib/supabase';
+import { firestoreService } from '../lib/firestoreService';
+import { db, auth } from '../lib/firebase';
+import { where, orderBy } from 'firebase/firestore';
 import { RechargeTransaction } from '../types';
 
 export const rechargeService = {
   async getRecharges() {
-    const { data, error } = await supabase
-      .from('payments')
-      .select(`
-        *,
-        locations (name, city)
-      `)
-      .order('payment_date', { ascending: false });
+    const userId = auth.currentUser?.uid;
+    if (!userId) return [];
+
+    const recharges = await firestoreService.getAll<any>('recharges', [
+      where('initiatedBy', '==', userId),
+      orderBy('rechargeDate', 'desc')
+    ]);
     
-    if (error) throw error;
-    
-    // Transform to match frontend interface
-    return data.map(item => ({
-      id: item.id,
-      transactionId: item.transaction_id || `TRX-${item.id.slice(0, 8)}`,
-      locationId: item.location_id,
-      rechargeDate: new Date(item.payment_date).toLocaleDateString(),
-      planId: item.plan_id,
-      amount: item.amount,
-      tax: item.tax || 0,
-      total: item.amount + (item.tax || 0),
-      paymentStatus: item.status, // Success, Pending, Failed
-      paymentMode: item.payment_method,
-      gatewayName: item.payment_gateway,
-      bankReference: item.utr_number,
-      settlementStatus: item.reconciled ? 'Settled' : 'Unsettled'
-    })) as any[];
+    return recharges;
   },
 
   async createRecharge(payment: any) {
-    const { data: { user } } = await supabase.auth.getUser();
+    const userId = auth.currentUser?.uid;
+    if (!userId) throw new Error('User not authenticated');
     
-    const { data, error } = await supabase
-      .from('payments')
-      .insert([{
-        ...payment,
-        recorded_by: user?.id,
-        payment_date: new Date().toISOString(),
-        status: 'success'
-      }])
-      .select()
-      .single();
-    
-    if (error) throw error;
-    return data;
+    return firestoreService.create('recharges', {
+      ...payment,
+      initiatedBy: userId,
+      rechargeDate: new Date().toISOString(),
+      paymentStatus: 'Success'
+    });
   },
 
   async getISPDistribution() {
-    const { data, error } = await supabase
-      .from('locations')
-      .select('isp_providers(name)');
-    
-    if (error) throw error;
+    const userId = auth.currentUser?.uid;
+    if (!userId) return [];
+
+    const locations = await firestoreService.getAll<any>('locations', [
+      where('userId', '==', userId)
+    ]);
 
     const distribution: Record<string, number> = {};
-    (data as any[] || []).forEach(item => {
-      const provider = Array.isArray(item.isp_providers) ? item.isp_providers[0] : item.isp_providers;
+    const providers = await firestoreService.getAll<any>('providers');
+
+    locations.forEach(item => {
+      const provider = providers.find(p => p.id === item.ispProviderId);
       const name = provider?.name || 'Unknown';
       distribution[name] = (distribution[name] || 0) + 1;
     });
 
-    const total = data.length;
+    const total = locations.length;
     return Object.entries(distribution).map(([name, count]) => ({
       name,
       count,
@@ -72,21 +54,20 @@ export const rechargeService = {
   },
 
   async getExpenditureTrend(type: 'Daily' | 'Monthly' | 'Yearly') {
-    // This is a simplified version. In a real app, you'd do more complex grouping in SQL.
-    const { data, error } = await supabase
-      .from('payments')
-      .select('amount, payment_date')
-      .eq('status', 'success')
-      .order('payment_date');
-    
-    if (error) throw error;
+    const userId = auth.currentUser?.uid;
+    if (!userId) return [];
 
-    // Default mock behavior if no data
-    if (!data || data.length === 0) return [];
+    const recharges = await firestoreService.getAll<any>('recharges', [
+      where('initiatedBy', '==', userId),
+      where('paymentStatus', '==', 'Success'),
+      orderBy('rechargeDate')
+    ]);
+    
+    if (!recharges || recharges.length === 0) return [];
 
     const trend: Record<string, number> = {};
-    data.forEach(p => {
-      const date = new Date(p.payment_date);
+    recharges.forEach(p => {
+      const date = new Date(p.rechargeDate);
       let key = '';
       if (type === 'Daily') key = date.toLocaleDateString('en-US', { weekday: 'short' });
       else if (type === 'Monthly') key = date.toLocaleDateString('en-US', { month: 'short' });

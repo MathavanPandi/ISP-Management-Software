@@ -1,52 +1,25 @@
-import { supabase } from '../lib/supabase';
+import { firestoreService } from '../lib/firestoreService';
+import { db, auth } from '../lib/firebase';
+import { orderBy } from 'firebase/firestore';
 import { Role } from '../types';
 
 export const roleService = {
   async getRoles() {
-    const { data, error } = await supabase
-      .from('roles')
-      .select('*')
-      .order('name');
-    
-    if (error) throw error;
-    return data as Role[];
+    return firestoreService.getAll<Role>('roles', [
+      orderBy('name')
+    ]);
   },
 
   async createRole(role: Partial<Role>) {
-    const { data, error } = await supabase
-      .from('roles')
-      .insert([{
-        name: role.name,
-        description: role.description
-      }])
-      .select()
-      .single();
-    
-    if (error) throw error;
-    return data;
+    return firestoreService.create<Role>('roles', role as Role);
   },
 
   async updateRole(id: string, updates: Partial<Role>) {
-    const { data, error } = await supabase
-      .from('roles')
-      .update({
-        name: updates.name,
-        description: updates.description
-      })
-      .eq('id', id)
-      .select()
-      .single();
-    
-    if (error) throw error;
-    return data;
+    await firestoreService.update('roles', id, updates);
+    return { id, ...updates };
   },
 
   async deleteRole(id: string) {
-    const { error } = await supabase
-      .from('roles')
-      .delete()
-      .eq('id', id);
-    
-    if (error) throw error;
+    await firestoreService.delete('roles', id);
   }
 };

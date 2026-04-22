@@ -71,7 +71,7 @@ export function Settings() {
         const updated = await userService.updateProfile(selectedUser.id, userData);
         setUsers(users.map(u => u.id === selectedUser.id ? { ...u, ...updated } : u));
       } else {
-        // In a real app, creating a user would involve Supabase Auth
+        // In a real app, creating a user would involve Database Auth
         // For now, we'll just handle updates or show a tip
         alert('New users must be created via Supabase Auth. Contact admin.');
       }

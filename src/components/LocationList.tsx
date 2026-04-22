@@ -44,7 +44,7 @@ export function LocationList() {
       setLocations(data);
     } catch (err: any) {
       console.error('Error fetching locations:', err);
-      setError('Could not load locations. Please check your Supabase connection.');
+      setError('Could not load locations. Please check your Database connection.');
     } finally {
       setLoading(false);
     }

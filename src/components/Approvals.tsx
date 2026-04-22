@@ -40,7 +40,7 @@ export function Approvals() {
   };
 
   const handleAction = async (id: string, action: 'approve' | 'reject') => {
-    // In a real app, we would update the status in Supabase
+    // In a real app, we would update the status in Database
     setApprovals(prev => prev.filter(r => r.id !== id));
     console.log(`${action === 'approve' ? 'Approved' : 'Rejected'} recharge:`, id);
   };

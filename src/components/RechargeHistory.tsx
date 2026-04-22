@@ -208,7 +208,7 @@ export function RechargeHistory() {
                 <tr>
                   <td colSpan={7} className="px-6 py-20 text-center">
                     <Loader2 className="animate-spin text-[#007AFF] mx-auto mb-4" size={32} />
-                    <p className="text-sm font-medium text-slate-500">Loading history from Supabase...</p>
+                    <p className="text-sm font-medium text-slate-500">Loading history from Database...</p>
                   </td>
                 </tr>
               ) : filteredRecharges.length === 0 ? (

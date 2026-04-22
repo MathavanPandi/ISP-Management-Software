@@ -1,4 +1,6 @@
-import { supabase } from '../lib/supabase';
+import { firestoreService } from '../lib/firestoreService';
+import { db, auth } from '../lib/firebase';
+import { collection, query, where, getDocs, setDoc, doc } from 'firebase/firestore';
 
 export const portalSyncService = {
   async sendOTP(mobile: string, provider: string) {
@@ -21,10 +23,13 @@ export const portalSyncService = {
   },
 
   async performSync(authType: 'credentials' | 'mobile', authValue: string, providerId: string) {
+    const userId = auth.currentUser?.uid;
+    if (!userId) throw new Error('User not authenticated');
+
     // Simulate real sync logic
     await new Promise((resolve) => setTimeout(resolve, 2500));
 
-    const { data: provider } = await supabase.from('isp_providers').select('*').eq('id', providerId).single();
+    const provider = await firestoreService.getOne<any>('providers', providerId);
     if (!provider) throw new Error('Provider not found');
 
     const providerName = provider.name.toLowerCase();
@@ -36,93 +41,94 @@ export const portalSyncService = {
       discoveredLocations = [
         {
           name: 'Bengaluru MG Road Office',
-          branch_type: 'Office',
+          branchType: 'Office',
           city: 'Bengaluru',
           state: 'Karnataka',
           address: '123 MG Road, Bengaluru',
-          isp_provider_id: providerId,
-          account_id: 'AIR-KAR-9901',
-          registered_mobile: authValue,
+          ispProviderId: providerId,
+          accountId: 'AIR-KAR-9901',
+          registeredMobile: authValue,
           status: 'Active',
-          next_due_date: new Date(Date.now() + 15 * 24 * 3600 * 1000).toISOString(),
+          nextDueDate: new Date(Date.now() + 15 * 24 * 3600 * 1000).toISOString(),
         }
       ];
       discoveredPlans = [
         {
-          provider_id: providerId,
+          providerId: providerId,
           name: 'Airtel Xstream Fiber 200Mbps',
-          speed_mbps: 200,
-          price_base: 999,
-          validity_days: 30,
+          bandwidth: '200 Mbps',
+          amount: 999,
+          billingCycle: 'Monthly',
         }
       ];
     } else if (providerName.includes('jio')) {
       discoveredLocations = [
         {
           name: 'Mumbai HQ Office',
-          branch_type: 'Office',
+          branchType: 'Office',
           city: 'Mumbai',
           state: 'Maharashtra',
           address: 'Reliance Corporate Park, Navi Mumbai',
-          isp_provider_id: providerId,
-          account_id: 'JIO-MUM-8822',
-          registered_email: authType === 'credentials' ? authValue : undefined,
+          ispProviderId: providerId,
+          accountId: 'JIO-MUM-8822',
+          registeredEmail: authType === 'credentials' ? authValue : undefined,
           status: 'Active',
-          next_due_date: new Date(Date.now() + 20 * 24 * 3600 * 1000).toISOString(),
+          nextDueDate: new Date(Date.now() + 20 * 24 * 3600 * 1000).toISOString(),
         }
       ];
       discoveredPlans = [
         {
-          provider_id: providerId,
+          providerId: providerId,
           name: 'JioFiber Gold 1Gbps',
-          speed_mbps: 1000,
-          price_base: 2499,
-          validity_days: 30,
+          bandwidth: '1000 Mbps',
+          amount: 2499,
+          billingCycle: 'Monthly',
         }
       ];
     } else if (providerName.includes('act')) {
       discoveredLocations = [
         {
           name: 'Bengaluru Indiranagar Branch',
-          branch_type: 'Office',
+          branchType: 'Office',
           city: 'Bengaluru',
           state: 'Karnataka',
           address: '80ft Road, Indiranagar',
-          isp_provider_id: providerId,
-          account_id: 'ACT-BLR-1122',
-          registered_mobile: authValue,
+          ispProviderId: providerId,
+          accountId: 'ACT-BLR-1122',
+          registeredMobile: authValue,
           status: 'Active',
-          next_due_date: new Date(Date.now() + 10 * 24 * 3600 * 1000).toISOString(),
+          nextDueDate: new Date(Date.now() + 10 * 24 * 3600 * 1000).toISOString(),
         }
       ];
       discoveredPlans = [
         {
-          provider_id: providerId,
+          providerId: providerId,
           name: 'ACT Incredible 150Mbps',
-          speed_mbps: 150,
-          price_base: 1159,
-          validity_days: 30,
+          bandwidth: '150 Mbps',
+          amount: 1159,
+          billingCycle: 'Monthly',
         }
       ];
     }
 
-    // 4. Upsert discovered plans
+    // 4. Save discovered plans
     for (const plan of discoveredPlans) {
-      await supabase.from('plans').upsert(plan, { onConflict: 'name, provider_id' });
+      await firestoreService.create('plans', plan);
     }
 
-    // 5. Upsert discovered locations
+    // 5. Save discovered locations
     for (const loc of discoveredLocations) {
-      const { data: syncedPlan } = await supabase.from('plans')
-        .select('id')
-        .eq('name', discoveredPlans[0].name)
-        .eq('provider_id', providerId)
-        .single();
+      const plans = await firestoreService.getAll<any>('plans', [
+        where('name', '==', discoveredPlans[0].name),
+        where('providerId', '==', providerId)
+      ]);
+      const syncedPlan = plans[0];
 
-      await supabase.from('locations').upsert({
+      await firestoreService.create('locations', {
         ...loc,
-        plan_id: syncedPlan?.id
-      }, { onConflict: 'account_id' });
+        userId,
+        planId: syncedPlan?.id
+      });
     }
 
     return {

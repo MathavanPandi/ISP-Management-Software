@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { supabase } from './lib/supabase';
+import { auth } from './lib/firebase';
+import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
 import { Layout } from './components/Layout';
 import { Dashboard } from './components/Dashboard';
 import { LocationList } from './components/LocationList';
@@ -19,26 +20,20 @@ import { PRDViewer } from './components/PRDViewer';
 import { UISpecsViewer } from './components/UISpecsViewer';
 
 export default function App() {
-  const [session, setSession] = React.useState<any>(null);
+  const [user, setUser] = React.useState<FirebaseUser | null>(null);
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
-    // Check active sessions and sets the user
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setUser(user);
       setLoading(false);
     });
 
-    // Listen for changes on auth state (sign in, sign out, etc.)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-
-    return () => subscription.unsubscribe();
+    return () => unsubscribe();
   }, []);
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await signOut(auth);
   };
 
   if (loading) {
@@ -49,7 +44,7 @@ export default function App() {
     );
   }
 
-  if (!session) {
+  if (!user) {
     return <Login onLogin={() => {}} />; // Login component handles auth now
   }
 
