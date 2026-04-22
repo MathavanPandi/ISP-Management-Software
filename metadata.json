@@ -1,0 +1,7 @@
+{
+  "name": "Mizaj ISP Management",
+  "description": "Enterprise-grade Indian ISP Management Software for FTTH, Broadband, and Wireless Service Providers. Features subscriber management, GST-compliant billing, UPI payments, and network operations.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
