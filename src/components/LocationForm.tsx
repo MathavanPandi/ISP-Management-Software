@@ -11,12 +11,18 @@ import {
   CreditCard, 
   Shield,
   Info,
-  Loader2
+  Loader2,
+  Plus,
+  User,
+  Smartphone,
+  Hash
 } from 'lucide-react';
 import { locationService } from '../services/locationService';
 import { ispService } from '../services/ispService';
 import { Location, BranchType, ConnectionType, BillingCycle, PriorityLevel } from '../types';
 import { cn } from '../lib/utils';
+import { Country, State, City } from 'country-state-city';
+import { SearchableSelect } from './SearchableSelect';
 
 export function LocationForm() {
   const navigate = useNavigate();
@@ -28,11 +34,14 @@ export function LocationForm() {
   const [providers, setProviders] = useState<any[]>([]);
   const [plans, setPlans] = useState<any[]>([]);
   
+  // Location Data
+  const [countries] = useState(Country.getAllCountries().map(c => ({ value: c.isoCode, label: c.name })));
+  const [states, setStates] = useState<{ value: string; label: string }[]>([]);
+  const [cities, setCities] = useState<{ value: string; label: string }[]>([]);
+  
   const [formData, setFormData] = useState<Partial<Location>>({
     name: '',
     branchType: 'Store',
-    city: '',
-    state: '',
     ispProviderId: '',
     connectionType: 'FTTH',
     planId: '',
@@ -46,14 +55,75 @@ export function LocationForm() {
     autoPay: false,
     status: 'Active',
     contactPerson: '',
+    city: '',
+    state: '',
+    country: 'IN', // Default to India
+    address: '',
     priority: 'Medium',
     criticality: 'Medium',
     backupAvailable: false,
+    lastRechargeDate: new Date().toISOString().split('T')[0],
+    simCount: 1,
+    assignedPerson: '',
+    simAssignments: []
   });
+
+  const calculateNextDueDate = (lastDate: string, cycle: string) => {
+    if (!lastDate) return '';
+    const date = new Date(lastDate);
+    if (isNaN(date.getTime())) return '';
+    
+    switch (cycle) {
+      case 'Monthly':
+        date.setMonth(date.getMonth() + 1);
+        break;
+      case 'Quarterly':
+        date.setMonth(date.getMonth() + 3);
+        break;
+      case 'Half-Yearly':
+        date.setMonth(date.getMonth() + 6);
+        break;
+      case 'Yearly':
+        date.setFullYear(date.getFullYear() + 1);
+        break;
+      default:
+        date.setMonth(date.getMonth() + 1);
+    }
+    return date.toISOString().split('T')[0];
+  };
 
   useEffect(() => {
     fetchInitialData();
   }, [id, isEdit]);
+
+  useEffect(() => {
+    if (formData.country) {
+      const s = State.getStatesOfCountry(formData.country).map(st => ({ value: st.isoCode, label: st.name }));
+      setStates(s);
+      
+      // Keep state if it exists in the new list, otherwise reset
+      if (!s.find(st => st.value === formData.state)) {
+        setFormData(prev => ({ ...prev, state: '', city: '' }));
+      }
+    } else {
+      setStates([]);
+      setFormData(prev => ({ ...prev, state: '', city: '' }));
+    }
+  }, [formData.country]);
+
+  useEffect(() => {
+    if (formData.country && formData.state) {
+      const c = City.getCitiesOfState(formData.country, formData.state).map(ct => ({ value: ct.name, label: ct.name }));
+      setCities(c);
+      
+      if (!c.find(ct => ct.value === formData.city)) {
+        setFormData(prev => ({ ...prev, city: '' }));
+      }
+    } else {
+      setCities([]);
+      setFormData(prev => ({ ...prev, city: '' }));
+    }
+  }, [formData.country, formData.state]);
 
   const fetchInitialData = async () => {
     setFetching(true);
@@ -93,6 +163,34 @@ export function LocationForm() {
     }
   };
 
+  const handleSimAssignmentChange = (index: number, field: string, value: string) => {
+    const newAssignments = [...(formData.simAssignments || [])];
+    if (!newAssignments[index]) {
+      newAssignments[index] = { id: crypto.randomUUID(), assignedPerson: '', employeeId: '', mobileNumber: '', status: 'Active' };
+    }
+    newAssignments[index] = { ...newAssignments[index], [field]: value };
+    setFormData(prev => ({ ...prev, simAssignments: newAssignments }));
+  };
+
+  const addSimAssignment = () => {
+    const newAssignment = { id: crypto.randomUUID(), assignedPerson: '', employeeId: '', mobileNumber: '', status: 'Active' as const };
+    setFormData(prev => ({ 
+      ...prev, 
+      simAssignments: [...(prev.simAssignments || []), newAssignment],
+      simCount: (prev.simCount || 0) + 1
+    }));
+  };
+
+  const removeSimAssignment = (index: number) => {
+    const newAssignments = [...(formData.simAssignments || [])];
+    newAssignments.splice(index, 1);
+    setFormData(prev => ({ 
+      ...prev, 
+      simAssignments: newAssignments,
+      simCount: Math.max(0, (prev.simCount || 0) - 1)
+    }));
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
     // @ts-ignore
@@ -100,6 +198,19 @@ export function LocationForm() {
     
     if (name === 'ispProviderId') {
       handleProviderChange(value);
+    } else if (name === 'planId') {
+      const selectedPlan = plans.find(p => p.id === value);
+      if (selectedPlan) {
+        setFormData(prev => ({
+          ...prev,
+          planId: value,
+          amount: selectedPlan.price_base,
+          billingCycle: selectedPlan.billingCycle || 'Monthly',
+          bandwidth: selectedPlan.bandwidth || prev.bandwidth
+        }));
+      } else {
+        setFormData(prev => ({ ...prev, [name]: val }));
+      }
     } else {
       setFormData(prev => ({
         ...prev,
@@ -112,10 +223,14 @@ export function LocationForm() {
     e.preventDefault();
     setLoading(true);
     try {
+      const finalData = {
+        ...formData,
+        nextDueDate: calculateNextDueDate(formData.lastRechargeDate || '', formData.billingCycle || 'Monthly')
+      };
       if (isEdit && id) {
-        await locationService.updateLocation(id, formData);
+        await locationService.updateLocation(id, finalData);
       } else {
-        await locationService.createLocation(formData as any);
+        await locationService.createLocation(finalData as any);
       }
       navigate('/locations');
     } catch (err) {
@@ -197,7 +312,7 @@ export function LocationForm() {
 
       <form onSubmit={handleSubmit} className="space-y-6 pb-12">
         {/* Basic Information */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
           <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
             <Building2 size={18} className="text-[#007AFF]" />
             <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Basic Information</h3>
@@ -215,6 +330,40 @@ export function LocationForm() {
                 required
               />
             </div>
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Full Address</label>
+              <textarea 
+                name="address"
+                value={formData.address}
+                onChange={handleChange}
+                placeholder="Shop No, Building, Street, Area..."
+                rows={2}
+                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#007AFF]/20 transition-all resize-none"
+              />
+            </div>
+            <SearchableSelect 
+              label="Country"
+              options={countries}
+              value={formData.country || ''}
+              onChange={(val) => setFormData(prev => ({ ...prev, country: val }))}
+              placeholder="Select Country"
+            />
+            <SearchableSelect 
+              label="State / Province"
+              options={states}
+              value={formData.state || ''}
+              onChange={(val) => setFormData(prev => ({ ...prev, state: val }))}
+              placeholder="Select State"
+              disabled={!formData.country}
+            />
+            <SearchableSelect 
+              label="City"
+              options={cities}
+              value={formData.city || ''}
+              onChange={(val) => setFormData(prev => ({ ...prev, city: val }))}
+              placeholder="Select City"
+              disabled={!formData.state}
+            />
             <div className="space-y-2">
               <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Branch Type</label>
               <select 
@@ -230,35 +379,11 @@ export function LocationForm() {
                 <option value="Other">Other</option>
               </select>
             </div>
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">City</label>
-              <input 
-                type="text" 
-                name="city"
-                value={formData.city}
-                onChange={handleChange}
-                placeholder="e.g. Bengaluru"
-                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#007AFF]/20 transition-all"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">State</label>
-              <input 
-                type="text" 
-                name="state"
-                value={formData.state}
-                onChange={handleChange}
-                placeholder="e.g. Karnataka"
-                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#007AFF]/20 transition-all"
-                required
-              />
-            </div>
           </div>
         </div>
 
         {/* ISP & Connection Details */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
           <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
             <Globe size={18} className="text-[#007AFF]" />
             <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">ISP & Connection Details</h3>
@@ -305,19 +430,101 @@ export function LocationForm() {
                 <option value="Broadband">Broadband</option>
                 <option value="Leased Line">Leased Line</option>
                 <option value="Wireless">Wireless</option>
+                <option value="Dongle">Dongle</option>
+                <option value="Backup Line">Backup Line</option>
+                <option value="SIM Card">SIM Card</option>
               </select>
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Account ID / CID</label>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Account ID / CID / Mobile</label>
               <input 
                 type="text" 
                 name="accountId"
                 value={formData.accountId}
                 onChange={handleChange}
-                placeholder="ISP Account Number"
+                placeholder={formData.connectionType === 'SIM Card' ? 'SIM Number / Phone' : 'ISP Account Number'}
                 className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#007AFF]/20 transition-all"
               />
             </div>
+
+            {formData.connectionType === 'SIM Card' && (
+              <div className="md:col-span-2 space-y-4 pt-4 border-t border-slate-100">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">SIM Assignments Registry</h4>
+                    <p className="text-[10px] text-slate-500">Track individual SIM distribution among employees</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addSimAssignment}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#007AFF]/10 text-[#007AFF] rounded-lg text-xs font-bold hover:bg-[#007AFF]/20 transition-all"
+                  >
+                    <Plus size={14} /> Add SIM
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3">
+                  {(formData.simAssignments || []).map((assignment, index) => (
+                    <div key={assignment.id} className="relative group grid grid-cols-1 md:grid-cols-3 gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl transition-all hover:bg-white hover:shadow-md">
+                      <button
+                        type="button"
+                        onClick={() => removeSimAssignment(index)}
+                        className="absolute -top-2 -right-2 p-1 bg-white border border-rose-200 text-rose-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-50 shadow-sm"
+                      >
+                        <X size={12} />
+                      </button>
+                      
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                          <User size={10} /> Person Name
+                        </label>
+                        <input 
+                          type="text"
+                          value={assignment.assignedPerson}
+                          onChange={(e) => handleSimAssignmentChange(index, 'assignedPerson', e.target.value)}
+                          placeholder="Employee Name"
+                          className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#007AFF]/20 transition-all"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                          <Hash size={10} /> Employee ID
+                        </label>
+                        <input 
+                          type="text"
+                          value={assignment.employeeId}
+                          onChange={(e) => handleSimAssignmentChange(index, 'employeeId', e.target.value)}
+                          placeholder="e.g. EMP123"
+                          className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#007AFF]/20 transition-all"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                          <Smartphone size={10} /> Mobile Number
+                        </label>
+                        <input 
+                          type="tel"
+                          value={assignment.mobileNumber}
+                          onChange={(e) => handleSimAssignmentChange(index, 'mobileNumber', e.target.value)}
+                          placeholder="Assigned SIM No"
+                          className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#007AFF]/20 transition-all font-mono"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {(!formData.simAssignments || formData.simAssignments.length === 0) && (
+                    <div className="text-center py-8 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+                      <Smartphone size={24} className="mx-auto text-slate-300 mb-2" />
+                      <p className="text-xs text-slate-500 font-medium italic">No SIM assignments added yet.<br/>Click "Add SIM" to track distribution.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2 flex items-end">
               <label className="flex items-center gap-3 cursor-pointer p-2 bg-slate-50 border border-slate-200 rounded-lg w-full">
                 <input 
@@ -334,12 +541,23 @@ export function LocationForm() {
         </div>
 
         {/* Billing & Contact */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
           <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
             <CreditCard size={18} className="text-[#007AFF]" />
             <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Billing & Contact</h3>
           </div>
           <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Last Recharge Date</label>
+              <input 
+                type="date" 
+                name="lastRechargeDate"
+                value={formData.lastRechargeDate}
+                onChange={handleChange}
+                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#007AFF]/20 transition-all"
+                required
+              />
+            </div>
             <div className="space-y-2">
               <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Billing Cycle</label>
               <select 
@@ -391,7 +609,7 @@ export function LocationForm() {
         </div>
 
         {/* Criticality & Priority */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
           <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
             <Shield size={18} className="text-[#007AFF]" />
             <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Operational Criticality</h3>

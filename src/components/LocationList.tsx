@@ -207,7 +207,7 @@ export function LocationList() {
                         <div>
                           <div className="font-bold text-slate-900">{loc.name}</div>
                           <div className="text-xs text-slate-500 flex items-center gap-1">
-                            <MapPin size={12} /> {loc.city}, {loc.state}
+                            <MapPin size={12} /> {loc.city}, {loc.state}, {loc.country}
                           </div>
                         </div>
                       </div>
@@ -218,8 +218,14 @@ export function LocationList() {
                         <span className="text-sm font-medium text-slate-700">{loc.ispProviderName || 'Airtel Fiber'}</span>
                       </div>
                       <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
-                        {loc.speedMbps ? `${loc.speedMbps} Mbps` : '100 Mbps'} • {loc.connectionType || 'Broadband'}
+                        {loc.speedMbps ? `${loc.speedMbps} Mbps` : loc.bandwidth || '100 Mbps'} • {loc.connectionType || 'Broadband'}
+                        {loc.connectionType === 'SIM Card' && loc.simAssignments && loc.simAssignments.length > 0 && ` (${loc.simAssignments.length} Assigned)`}
                       </div>
+                      {loc.connectionType === 'SIM Card' && loc.simAssignments && loc.simAssignments.length > 0 && (
+                        <div className="mt-0.5 px-1.5 py-0.5 bg-blue-50 text-[#007AFF] rounded text-[9px] font-bold inline-block uppercase tracking-tight border border-blue-100">
+                          Primary: {loc.simAssignments[0].assignedPerson}
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4">
                       {loc.backupAvailable ? (

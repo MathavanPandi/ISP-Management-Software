@@ -21,11 +21,14 @@ export const rechargeService = {
     const userId = auth.currentUser?.uid;
     if (!userId) throw new Error('User not authenticated');
     
+    const rechargeDateStr = payment.rechargeDate || new Date().toISOString();
+    const rechargeDate = parseISO(rechargeDateStr);
+    
     // 1. Create the recharge transaction record
     const result = await firestoreService.create('recharges', {
       ...payment,
       initiatedBy: userId,
-      rechargeDate: new Date().toISOString(),
+      rechargeDate: rechargeDateStr,
       paymentStatus: 'Success'
     });
 
@@ -35,14 +38,15 @@ export const rechargeService = {
 
     if (locationSnap.exists()) {
       const locationData = locationSnap.data();
-      const currentNextDue = locationData.nextDueDate ? parseISO(locationData.nextDueDate) : new Date();
+      const currentNextDue = locationData.nextDueDate ? parseISO(locationData.nextDueDate) : rechargeDate;
       
       // Calculate new due date based on billing cycle
       let newNextDue;
       const cycle: BillingCycle = locationData.billingCycle || 'Monthly';
       
-      // If currently overdue, start from today. Otherwise add to existing due date.
-      const baseDate = new Date() > currentNextDue ? new Date() : currentNextDue;
+      // If payment date is more than 5 days after current due, start from payment date.
+      // Otherwise extend the existing due date.
+      const baseDate = rechargeDate > addDays(currentNextDue, 5) ? rechargeDate : currentNextDue;
 
       switch (cycle) {
         case 'Monthly':
@@ -63,7 +67,7 @@ export const rechargeService = {
 
       await updateDoc(locationRef, {
         nextDueDate: format(newNextDue, 'yyyy-MM-dd'),
-        lastRechargeDate: new Date().toISOString(),
+        lastRechargeDate: rechargeDateStr,
         status: 'Active',
         daysRemaining: Math.ceil((newNextDue.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
       });

@@ -26,6 +26,8 @@ export function PaymentModal({ isOpen, onClose, onSuccess, location }: PaymentMo
   const [step, setStep] = useState<'select' | 'processing' | 'success'>('select');
   const [method, setMethod] = useState<'UPI' | 'Card' | 'NetBanking' | 'Manual Offline'>('Manual Offline');
   const [txId, setTxId] = useState('');
+  const [rechargeDate, setRechargeDate] = useState(new Date().toISOString().split('T')[0]);
+  const [externalTransactionId, setExternalTransactionId] = useState('');
 
   if (!isOpen || !location) return null;
 
@@ -38,8 +40,8 @@ export function PaymentModal({ isOpen, onClose, onSuccess, location }: PaymentMo
         paymentMode: method,
         planId: location.planId,
         tax: location.amount * 0.18, 
-        transactionId: `MAN-${Math.floor(100000 + Math.random() * 900000)}`,
-        rechargeDate: new Date().toISOString(),
+        transactionId: externalTransactionId || `MAN-${Math.floor(100000 + Math.random() * 900000)}`,
+        rechargeDate: new Date(rechargeDate).toISOString(),
         paymentStatus: 'Success',
         settlementStatus: 'Settled'
       };
@@ -93,8 +95,30 @@ export function PaymentModal({ isOpen, onClose, onSuccess, location }: PaymentMo
                   <div className="text-2xl font-bold text-blue-700 italic serif">₹{location.amount.toLocaleString('en-IN')}</div>
                 </div>
                 <div className="text-right">
-                  <div className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-1">Next Cycle</div>
-                  <div className="text-xs font-bold text-blue-700">+{location.billingCycle}</div>
+                  <div className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-1">Cycle • Count</div>
+                  <div className="text-xs font-bold text-blue-700">{location.billingCycle} {location.simCount && location.simCount > 1 ? `• ${location.simCount} SIMs` : ''}</div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Recharge Date</label>
+                  <input 
+                    type="date"
+                    value={rechargeDate}
+                    onChange={(e) => setRechargeDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#007AFF]/20 transition-all font-bold"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Transaction ID / UTR</label>
+                  <input 
+                    type="text"
+                    value={externalTransactionId}
+                    onChange={(e) => setExternalTransactionId(e.target.value)}
+                    placeholder="Optional"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#007AFF]/20 transition-all"
+                  />
                 </div>
               </div>
 

@@ -44,6 +44,9 @@ service cloud.firestore {
       return data.keys().hasAll(['id', 'name', 'ispProviderId', 'planId', 'userId'])
         && data.userId == request.auth.uid
         && data.name is string && data.name.size() <= 100
+        && data.city is string && data.city.size() <= 100
+        && data.state is string && data.state.size() <= 100
+        && data.country is string && data.country.size() <= 5
         && data.priority in ['High', 'Medium', 'Low'];
     }
 

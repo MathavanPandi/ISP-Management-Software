@@ -52,6 +52,7 @@
         "branchType": { "type": "string" },
         "city": { "type": "string" },
         "state": { "type": "string" },
+        "country": { "type": "string" },
         "address": { "type": "string" },
         "ispProviderId": { "type": "string" },
         "connectionType": { "type": "string" },
@@ -75,6 +76,21 @@
         "criticality": { "type": "string" },
         "backupAvailable": { "type": "boolean" },
         "remarks": { "type": "string" },
+        "simCount": { "type": "number" },
+        "assignedPerson": { "type": "string" },
+        "simAssignments": { 
+          "type": "array",
+          "items": { 
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "assignedPerson": { "type": "string" },
+              "employeeId": { "type": "string" },
+              "mobileNumber": { "type": "string" },
+              "status": { "type": "string", "enum": ["Active", "Inactive", "Lost", "Terminated"] }
+            }
+          }
+        },
         "userId": { "type": "string", "description": "The user who owns this location" }
       },
       "required": ["id", "name", "ispProviderId", "planId", "userId"]

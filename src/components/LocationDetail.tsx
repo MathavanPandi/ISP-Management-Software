@@ -17,7 +17,8 @@ import {
   Clock,
   Zap,
   Loader2,
-  Printer
+  Printer,
+  Smartphone
 } from 'lucide-react';
 import { locationService } from '../services/locationService';
 import { ispService } from '../services/ispService';
@@ -145,7 +146,7 @@ export function LocationDetail() {
               </span>
             </div>
             <p className="text-sm text-slate-500 flex items-center gap-1">
-              <MapPin size={14} /> {location.city}, {location.state} • Account ID: {location.accountId}
+              <MapPin size={14} /> {location.city}, {location.state}, {location.country} • Account ID: {location.accountId}
             </p>
           </div>
         </div>
@@ -205,7 +206,37 @@ export function LocationDetail() {
                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Monthly Cost</div>
                 <div className="text-sm font-bold text-slate-900">₹{location.amount.toLocaleString('en-IN')}</div>
               </div>
+              {location.connectionType === 'SIM Card' && (
+                <>
+                  <div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total SIMs</div>
+                    <div className="text-sm font-bold text-slate-900">{location.simCount || 0} Cards</div>
+                  </div>
+                </>
+              )}
             </div>
+
+            {location.connectionType === 'SIM Card' && location.simAssignments && location.simAssignments.length > 0 && (
+              <div className="mt-6 pt-6 border-t border-slate-100">
+                <div className="flex items-center gap-2 mb-4">
+                  <Smartphone size={16} className="text-[#007AFF]" />
+                  <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Employee Assignments</h4>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {location.simAssignments.map((sim) => (
+                    <div key={sim.id} className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-900">{sim.assignedPerson}</span>
+                        <span className="text-[9px] font-bold text-slate-400 bg-white px-1.5 py-0.5 rounded border border-slate-100">{sim.employeeId}</span>
+                      </div>
+                      <div className="text-xs text-[#007AFF] font-mono font-bold flex items-center gap-1">
+                        <Smartphone size={12} /> {sim.mobileNumber}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Recharge History */}
@@ -309,6 +340,14 @@ export function LocationDetail() {
               Contact Details
             </h3>
             <div className="space-y-4">
+              <div>
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Full Address</div>
+                <div className="text-sm font-medium text-slate-700 leading-relaxed">
+                  {location.address}<br />
+                  {location.city}, {location.state}<br />
+                  {location.country}
+                </div>
+              </div>
               <div>
                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Contact Person</div>
                 <div className="text-sm font-bold text-slate-900">{location.contactPerson}</div>

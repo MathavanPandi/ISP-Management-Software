@@ -1,5 +1,5 @@
 export type BranchType = 'Store' | 'Office' | 'Warehouse' | 'Factory' | 'Other';
-export type ConnectionType = 'Broadband' | 'FTTH' | 'Leased Line' | 'Wireless' | 'Dongle' | 'Backup Line';
+export type ConnectionType = 'Broadband' | 'FTTH' | 'Leased Line' | 'Wireless' | 'Dongle' | 'Backup Line' | 'SIM Card';
 export type BillingCycle = 'Monthly' | 'Quarterly' | 'Half-Yearly' | 'Yearly';
 export type LocationStatus = 'Active' | 'Due Soon' | 'Overdue' | 'Recharged' | 'Disconnected' | 'Temporary Hold';
 export type PriorityLevel = 'High' | 'Medium' | 'Low';
@@ -21,12 +21,21 @@ export interface ISPPlan {
   billingCycle: BillingCycle;
 }
 
+export interface SimAssignment {
+  id: string;
+  assignedPerson: string;
+  employeeId: string;
+  mobileNumber: string;
+  status: 'Active' | 'Inactive' | 'Lost' | 'Terminated';
+}
+
 export interface Location {
   id: string;
   name: string;
   branchType: BranchType;
   city: string;
   state: string;
+  country: string;
   address?: string;
   ispProviderId: string;
   connectionType: ConnectionType;
@@ -50,6 +59,10 @@ export interface Location {
   criticality: PriorityLevel;
   backupAvailable: boolean;
   remarks?: string;
+  // Multi-SIM support
+  simCount?: number;
+  assignedPerson?: string;
+  simAssignments?: SimAssignment[];
 }
 
 export type PaymentMode = 
