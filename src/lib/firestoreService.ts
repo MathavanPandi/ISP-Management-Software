@@ -32,7 +32,7 @@ export function handleFirestoreError(error: any, operationType: any, path: strin
   const currentUser = auth.currentUser;
   
   const errorInfo: FirestoreErrorInfo = {
-    error: error.message || 'Missing or insufficient permissions',
+    error: error instanceof Error ? error.message : (typeof error === 'object' && error?.message) ? error.message : String(error),
     operationType,
     path,
     authInfo: {
@@ -40,7 +40,7 @@ export function handleFirestoreError(error: any, operationType: any, path: strin
       email: currentUser?.email || 'none',
       emailVerified: currentUser?.emailVerified || false,
       isAnonymous: currentUser?.isAnonymous || true,
-      providerInfo: currentUser?.providerData.map(p => ({
+      providerInfo: currentUser?.providerData?.map(p => ({
         providerId: p.providerId,
         displayName: p.displayName,
         email: p.email

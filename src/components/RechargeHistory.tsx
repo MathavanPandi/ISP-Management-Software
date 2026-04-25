@@ -275,13 +275,14 @@ export function RechargeHistory() {
                         </td>
                       )}
                       <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center justify-end gap-2">
                           <button 
                             onClick={() => handleViewInvoice(recharge)}
-                            className="p-2 text-slate-400 hover:text-[#007AFF] hover:bg-[#007AFF]/5 rounded-lg transition-all"
-                            title="View Invoice"
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-600 hover:bg-[#007AFF]/10 hover:text-[#007AFF] border border-slate-200 rounded-lg transition-all text-[10px] font-bold uppercase tracking-tight"
+                            title="Print Invoice"
                           >
-                            <Printer size={18} />
+                            <Printer size={14} />
+                            Print
                           </button>
                           <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all">
                             <MoreVertical size={18} />

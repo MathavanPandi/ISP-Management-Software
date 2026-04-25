@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Search, 
@@ -14,7 +14,10 @@ import {
   Paperclip,
   Eye,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Edit,
+  Trash2,
+  CreditCard
 } from 'lucide-react';
 import { locationService } from '../services/locationService';
 import { Location } from '../types';
@@ -31,9 +34,21 @@ export function LocationList() {
   const [filterStatus, setFilterStatus] = React.useState('All');
   const [selectedLocation, setSelectedLocation] = React.useState<{ id: string, name: string } | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = React.useState(false);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     fetchLocations();
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setOpenMenuId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const fetchLocations = async () => {
@@ -54,6 +69,21 @@ export function LocationList() {
     e.stopPropagation();
     setSelectedLocation({ id, name });
     setIsDrawerOpen(true);
+    setOpenMenuId(null);
+  };
+
+  const handleDelete = async (e: React.MouseEvent, id: string, name: string) => {
+    e.stopPropagation();
+    setOpenMenuId(null);
+    if (!window.confirm(`Are you sure you want to delete ${name}? This action cannot be undone.`)) return;
+
+    try {
+      await locationService.deleteLocation(id);
+      setLocations(prev => prev.filter(loc => loc.id !== id));
+    } catch (err) {
+      console.error('Error deleting location:', err);
+      alert('Failed to delete location.');
+    }
   };
 
   const filteredLocations = locations.filter(loc => {
@@ -112,8 +142,8 @@ export function LocationList() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
+        <div className="overflow-x-visible">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
@@ -228,7 +258,7 @@ export function LocationList() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-2 relative">
                         <button 
                           onClick={(e) => {
                             e.stopPropagation();
@@ -239,21 +269,71 @@ export function LocationList() {
                         >
                           <Eye size={18} />
                         </button>
-                        <button 
-                          onClick={(e) => openAttachments(e, loc.id, loc.name)}
-                          className="p-2 text-slate-400 hover:text-[#007AFF] transition-colors"
-                          title="View Attachments"
-                        >
-                          <Paperclip size={18} />
-                        </button>
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                          }}
-                          className="p-2 text-slate-400 hover:text-slate-600 transition-colors"
-                        >
-                          <MoreVertical size={18} />
-                        </button>
+                        
+                        <div className="relative">
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenMenuId(openMenuId === loc.id ? null : loc.id);
+                            }}
+                            className="p-2 text-slate-400 hover:text-slate-600 transition-colors"
+                          >
+                            <MoreVertical size={18} />
+                          </button>
+
+                          {openMenuId === loc.id && (
+                            <div 
+                              ref={menuRef}
+                              className="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-xl border border-slate-200 z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200"
+                            >
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate(`/locations/${loc.id}`);
+                                }}
+                                className="w-full px-4 py-2 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                              >
+                                <Eye size={16} className="text-slate-400" />
+                                View Details
+                              </button>
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate(`/locations/${loc.id}/edit`);
+                                }}
+                                className="w-full px-4 py-2 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                              >
+                                <Edit size={16} className="text-slate-400" />
+                                Edit Location
+                              </button>
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate(`/due-tracker`);
+                                }}
+                                className="w-full px-4 py-2 text-left text-sm font-bold text-[#FF6B00] hover:bg-orange-50 flex items-center gap-2"
+                              >
+                                <CreditCard size={16} className="text-[#FF6B00]" />
+                                Recharge
+                              </button>
+                              <button 
+                                onClick={(e) => openAttachments(e, loc.id, loc.name)}
+                                className="w-full px-4 py-2 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                              >
+                                <Paperclip size={16} className="text-slate-400" />
+                                Attachments
+                              </button>
+                              <div className="my-1 border-t border-slate-100" />
+                              <button 
+                                onClick={(e) => handleDelete(e, loc.id, loc.name)}
+                                className="w-full px-4 py-2 text-left text-sm font-bold text-rose-600 hover:bg-rose-50 flex items-center gap-2"
+                              >
+                                <Trash2 size={16} className="text-rose-400" />
+                                Delete Location
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
                   </tr>

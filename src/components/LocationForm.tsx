@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { 
   ArrowLeft, 
   Save, 
+  Trash2,
   X, 
   Building2, 
   MapPin, 
@@ -125,6 +126,21 @@ export function LocationForm() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!id || !window.confirm('Are you sure you want to delete this location? This action cannot be undone.')) return;
+    
+    setLoading(true);
+    try {
+      await locationService.deleteLocation(id);
+      navigate('/locations');
+    } catch (err) {
+      console.error('Error deleting location:', err);
+      alert('Failed to delete location.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (fetching) {
     return (
       <div className="min-h-[400px] flex items-center justify-center">
@@ -159,6 +175,16 @@ export function LocationForm() {
           >
             Cancel
           </button>
+          {isEdit && (
+            <button 
+              onClick={handleDelete}
+              disabled={loading}
+              className="flex items-center gap-2 px-6 py-2 bg-rose-50 text-rose-600 border border-rose-200 rounded-lg font-bold hover:bg-rose-100 transition-colors"
+            >
+              <Trash2 size={18} />
+              Delete
+            </button>
+          )}
           <button 
             onClick={handleSubmit}
             className="flex items-center gap-2 px-6 py-2 bg-[#FF6B00] text-white rounded-lg font-bold hover:bg-[#E66000] transition-colors shadow-sm"

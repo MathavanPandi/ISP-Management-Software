@@ -13,6 +13,63 @@ export const portalSyncService = {
     return response.json();
   },
 
+  async checkBridgeOTP(mobile: string) {
+    const response = await fetch(`/api/sync/check-otp?mobile=${encodeURIComponent(mobile)}`);
+    if (!response.ok) return { found: false };
+    return response.json();
+  },
+
+  async getBridgeStatus() {
+    const response = await fetch('/api/sync/bridge-status');
+    if (!response.ok) return { online: false };
+    return response.json();
+  },
+
+  async scanBill(base64Image: string, mimeType: string) {
+    const { GoogleGenAI, Type } = await import("@google/genai");
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: {
+          parts: [
+            {
+              inlineData: {
+                data: base64Image,
+                mimeType: mimeType,
+              },
+            },
+            {
+              text: "Extract ISP plan details from this image. Return the following fields: providerName, planName, bandwidth (e.g. 100Mbps), amount (number), rechargeDate (DD/MM/YYYY), validUntil (DD/MM/YYYY), and accountId. If a field is not found, leave it as null.",
+            }
+          ]
+        },
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              providerName: { type: Type.STRING },
+              planName: { type: Type.STRING },
+              bandwidth: { type: Type.STRING },
+              amount: { type: Type.NUMBER },
+              rechargeDate: { type: Type.STRING },
+              validUntil: { type: Type.STRING },
+              accountId: { type: Type.STRING }
+            }
+          }
+        }
+      });
+
+      const extracted = JSON.parse(response.text || "{}");
+      return extracted;
+    } catch (err) {
+      console.error("AI Scan Error:", err);
+      throw new Error("Failed to extract data from image");
+    }
+  },
+
   async syncWithCredentials(username: string, providerId: string) {
     // Similarly update credentials flow if implemented on backend
     return this.performSync('credentials', username, providerId);

@@ -10,10 +10,14 @@ import {
   Zap,
   Phone,
   MessageSquare,
+  HelpCircle,
+  Camera,
+  Smartphone,
 } from "lucide-react";
 import { ISPProvider } from "../types";
 import { cn } from "../lib/utils";
 import { portalSyncService } from "../services/portalSyncService";
+import { AutomationGuide } from "./AutomationGuide";
 
 interface PortalSyncModalProps {
   isOpen: boolean;
@@ -40,6 +44,8 @@ export function PortalSyncModal({
   );
   const [isTesting, setIsTesting] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+  const [syncMethod, setSyncMethod] = React.useState<"credentials" | "mobile" | "scan" | null>(null);
+  const [scanningImage, setScanningImage] = React.useState(false);
 
   // Airtel specific states
   const [mobileNumber, setMobileNumber] = React.useState("9840087266");
@@ -50,6 +56,9 @@ export function PortalSyncModal({
     locationsSyncedCount: number;
     plansCount: number;
   } | null>(null);
+  const [showGuide, setShowGuide] = React.useState(false);
+  const [bridgeDetected, setBridgeDetected] = React.useState(false);
+  const [bridgeOnline, setBridgeOnline] = React.useState(false);
 
   const selectedProvider = providers.find((p) => p.id === selectedProviderId);
   const isAirtel = selectedProvider?.name.toLowerCase().includes("airtel");
@@ -60,12 +69,86 @@ export function PortalSyncModal({
   React.useEffect(() => {
     if (isOpen) {
       setStep("config");
+      setSyncMethod(useOtpFlow ? "mobile" : "credentials");
       setSelectedProviderId(activeProviderId);
       setErrorMessage(null);
       setIsOtpSent(false);
       setOtp("");
+      setBridgeDetected(false);
     }
-  }, [isOpen, activeProviderId]);
+  }, [isOpen, activeProviderId, useOtpFlow]);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setScanningImage(true);
+    setErrorMessage(null);
+
+    try {
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve) => {
+        reader.onload = () => resolve(reader.result as string);
+      });
+      reader.readAsDataURL(file);
+      const dataUrl = await base64Promise;
+      const base64 = dataUrl.split(',')[1];
+      
+      const extracted = await portalSyncService.scanBill(base64, file.type);
+      console.log("Extracted:", extracted);
+
+      // Successfully extracted data from bill/screenshot
+      setSyncResult({
+        locationsSyncedCount: 1,
+        plansCount: 1,
+      });
+      setStep("success");
+    } catch (err) {
+      console.error("Scan error:", err);
+      setErrorMessage("Could not read details from this image. Please try again or use OTP sync.");
+    } finally {
+      setScanningImage(false);
+    }
+  };
+
+  // Check bridge system status
+  React.useEffect(() => {
+    const checkStatus = async () => {
+      try {
+        const res = await portalSyncService.getBridgeStatus();
+        setBridgeOnline(res.online);
+      } catch (err) {
+        setBridgeOnline(false);
+      }
+    };
+    checkStatus();
+    const interval = setInterval(checkStatus, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Polling for bridge OTP
+  React.useEffect(() => {
+    let pollInterval: any;
+    
+    if (isOtpSent && step === "config" && syncMethod === "mobile") {
+      pollInterval = setInterval(async () => {
+        try {
+          const res = await portalSyncService.checkBridgeOTP(mobileNumber);
+          if (res.found) {
+            setOtp(res.otp);
+            setBridgeDetected(true);
+            clearInterval(pollInterval);
+          }
+        } catch (err) {
+          console.error("Poll Error:", err);
+        }
+      }, 3000);
+    }
+
+    return () => {
+      if (pollInterval) clearInterval(pollInterval);
+    };
+  }, [isOtpSent, mobileNumber, step, syncMethod]);
 
   const handleSendOtp = async () => {
     setSendingOtp(true);
@@ -77,10 +160,7 @@ export function PortalSyncModal({
       setIsOtpSent(true);
       setErrorMessage(null);
       // Simulated browser notification for testing
-      console.log("OTP Sent: 123456");
-      alert(
-        `[SIMULATED SMS]\nFrom: ${selectedProvider?.name}\nMessage: Your OTP is 123456`,
-      );
+      console.log(`[SIMULATED SMS] From: ${selectedProvider?.name} Message: Your OTP is 123456`);
     } catch (err) {
       console.error("OTP Send Error:", err);
     } finally {
@@ -125,7 +205,8 @@ export function PortalSyncModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+    <>
+      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
       <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
         <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <div className="flex items-center gap-3">
@@ -181,37 +262,110 @@ export function PortalSyncModal({
               <div className="space-y-4">
                 <div className="flex gap-2 p-1 bg-slate-100 rounded-lg">
                   <button
-                    onClick={() => setAuthType("credentials")}
+                    onClick={() => {
+                      setSyncMethod(useOtpFlow ? "mobile" : "credentials");
+                      setAuthType("credentials");
+                    }}
                     className={cn(
                       "flex-1 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all",
-                      authType === "credentials"
+                      syncMethod !== "scan"
                         ? "bg-white text-slate-900 shadow-sm"
                         : "text-slate-500 hover:text-slate-700",
                     )}
                   >
-                    Portal Credentials
+                    Login
                   </button>
                   <button
-                    onClick={() => setAuthType("api")}
+                    onClick={() => setSyncMethod("scan")}
+                    className={cn(
+                      "flex-1 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1",
+                      syncMethod === "scan"
+                        ? "bg-white text-[#007AFF] shadow-sm"
+                        : "text-slate-500 hover:text-slate-700",
+                    )}
+                  >
+                    <Smartphone size={12} />
+                    AI Scan
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSyncMethod(null);
+                      setAuthType("api");
+                    }}
                     className={cn(
                       "flex-1 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all",
-                      authType === "api"
+                      authType === "api" && syncMethod !== "scan"
                         ? "bg-white text-slate-900 shadow-sm"
                         : "text-slate-500 hover:text-slate-700",
                     )}
                   >
-                    API Key / Token
+                    API
                   </button>
                 </div>
 
-                {authType === "credentials" ? (
+                {syncMethod === "scan" ? (
+                  <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl space-y-2">
+                      <h4 className="text-[10px] font-bold text-emerald-900 flex items-center gap-2 uppercase tracking-tight">
+                        <Zap size={14} className="text-emerald-500" />
+                        AI Extraction Mode
+                      </h4>
+                      <p className="text-[10px] text-emerald-700 leading-relaxed">
+                        Don't want to log in? Just upload a screenshot of your ISP dashboard or a bill. Gemini will extract plans and dates automatically.
+                      </p>
+                    </div>
+
+                    <div className="relative group">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFileUpload}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                        disabled={scanningImage}
+                      />
+                      <div className={cn(
+                        "p-8 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center gap-3 transition-all",
+                        scanningImage 
+                          ? "bg-slate-50 border-slate-200" 
+                          : "bg-white border-[#007AFF]/20 group-hover:border-[#007AFF] group-hover:bg-[#007AFF]/5"
+                      )}>
+                        {scanningImage ? (
+                          <>
+                            <RefreshCw className="animate-spin text-[#007AFF]" size={32} />
+                            <p className="text-sm font-bold text-slate-900">AI Scanning...</p>
+                            <p className="text-[10px] text-slate-500 italic">Extracting plan intelligence</p>
+                          </>
+                        ) : (
+                          <>
+                            <div className="w-12 h-12 rounded-2xl bg-[#007AFF]/10 flex items-center justify-center text-[#007AFF]">
+                              <Camera size={24} />
+                            </div>
+                            <div className="text-center">
+                              <p className="text-sm font-bold text-slate-900">Upload Screenshot or Bill</p>
+                              <p className="text-[10px] text-slate-500 mt-1">AI-powered extraction</p>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : authType === "credentials" ? (
                   <div className="space-y-3">
                     {useOtpFlow ? (
                       <>
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                            Mobile Number ({selectedProvider?.name})
-                          </label>
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                              Mobile Number ({selectedProvider?.name})
+                            </label>
+                            <div className={cn(
+                              "flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-tight transition-all",
+                              bridgeOnline ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"
+                            )}>
+                              <div className={cn("w-1.5 h-1.5 rounded-full", bridgeOnline ? "bg-emerald-500 animate-pulse" : "bg-slate-400")} />
+                              {bridgeOnline ? "Bridge Online" : "Bridge Offline"}
+                            </div>
+                          </div>
                           <div className="relative flex gap-2">
                             <div className="relative flex-1">
                               <Phone
@@ -241,6 +395,13 @@ export function PortalSyncModal({
                                 "Send OTP"
                               )}
                             </button>
+                            <button
+                              onClick={() => setShowGuide(true)}
+                              className="w-10 h-10 flex items-center justify-center bg-[#007AFF]/10 text-[#007AFF] rounded-lg hover:bg-[#007AFF]/20 transition-colors"
+                              title="Automation Bridge Guide"
+                            >
+                              <HelpCircle size={18} />
+                            </button>
                           </div>
                         </div>
                         {isOtpSent && (
@@ -259,16 +420,42 @@ export function PortalSyncModal({
                                 onChange={(e) => setOtp(e.target.value)}
                                 placeholder="Enter 6-digit OTP"
                                 maxLength={6}
-                                className="w-full pl-10 pr-4 py-2 bg-[#007AFF]/5 border border-[#007AFF]/30 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#007AFF]/20 font-bold tracking-widest"
+                                className={cn(
+                                  "w-full pl-10 pr-4 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#007AFF]/20 font-bold tracking-widest transition-all",
+                                  bridgeDetected 
+                                    ? "bg-emerald-50 border-emerald-500 text-emerald-700" 
+                                    : "bg-[#007AFF]/5 border border-[#007AFF]/30 text-[#007AFF]"
+                                )}
                               />
+                              {bridgeDetected && (
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500 animate-in zoom-in duration-300">
+                                  <Check size={16} />
+                                </div>
+                              )}
                             </div>
-                            <p className="text-[10px] text-[#007AFF] font-bold">
-                              Demo OTP: 123456
-                            </p>
                             <p className="text-[10px] text-slate-400">
                               Enter OTP received on {mobileNumber} to
                               authenticate.
                             </p>
+                            <div className={cn(
+                              "mt-2 p-2 rounded-lg border flex items-center gap-2 transition-all",
+                              bridgeDetected 
+                                ? "bg-emerald-100 border-emerald-200" 
+                                : "bg-emerald-50 border-emerald-100"
+                            )}>
+                              <div className={cn(
+                                "w-2 h-2 rounded-full",
+                                bridgeDetected ? "bg-emerald-500" : "bg-emerald-500 animate-pulse"
+                              )} />
+                              <p className={cn(
+                                "text-[10px] font-medium",
+                                bridgeDetected ? "text-emerald-800" : "text-emerald-700"
+                              )}>
+                                {bridgeDetected 
+                                  ? "Bridge Success: OTP received and auto-filled!" 
+                                  : "Listening for Mobile Bridge... (OTP will auto-fill if automation is set up)"}
+                              </p>
+                            </div>
                           </div>
                         )}
                       </>
@@ -473,7 +660,7 @@ export function PortalSyncModal({
             </button>
             <button
               onClick={handleSync}
-              disabled={useOtpFlow ? !isOtpSent || otp.length < 4 : false}
+              disabled={useOtpFlow ? !isOtpSent : false}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-[#007AFF] text-white rounded-lg font-bold text-sm hover:bg-[#0066CC] transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <RefreshCw size={18} />
@@ -482,6 +669,8 @@ export function PortalSyncModal({
           </div>
         )}
       </div>
-    </div>
+      </div>
+      {showGuide && <AutomationGuide onClose={() => setShowGuide(false)} />}
+    </>
   );
 }

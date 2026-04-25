@@ -47,7 +47,20 @@ service cloud.firestore {
         && data.priority in ['High', 'Medium', 'Low'];
     }
 
+    function isLocationOwner(locationId) {
+      return isSignedIn() && get(/databases/$(database)/documents/locations/$(locationId)).data.userId == request.auth.uid;
+    }
+
     // --- Collection Rules ---
+    
+    match /admins/{userId} {
+      allow read: if isSignedIn();
+      allow write: if false; 
+    }
+    
+    match /test/connection {
+      allow get: if true;
+    }
 
     // 1. Profiles
     match /profiles/{userId} {
@@ -77,9 +90,13 @@ service cloud.firestore {
 
     // 5. Recharges
     match /recharges/{rechargeId} {
-      allow list, get: if isSignedIn() && (resource.data.initiatedBy == request.auth.uid || isAdmin());
+      allow list, get: if isSignedIn() && (
+        resource.data.initiatedBy == request.auth.uid || 
+        isAdmin() || 
+        isLocationOwner(resource.data.locationId)
+      );
       allow create: if isSignedIn() && (request.resource.data.initiatedBy == request.auth.uid || isAdmin());
-      allow update, delete: if isSignedIn() && (resource.data.initiatedBy == request.auth.uid || isAdmin());
+      allow update, delete: if isAdmin();
     }
   }
 }

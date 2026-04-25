@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Zap, Save, CreditCard, Clock, Database } from 'lucide-react';
+import { X, Zap, Save, CreditCard, Clock, Trash2, Database } from 'lucide-react';
 import { ISPPlan, BillingCycle } from '../types';
 import { ispService } from '../services/ispService';
 import { cn } from '../lib/utils';
@@ -56,6 +56,22 @@ export function PlanModal({ isOpen, onClose, onSuccess, plan, providerId }: Plan
     } catch (err) {
       console.error('Error saving plan:', err);
       alert('Failed to save plan details.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!plan || !window.confirm('Are you sure you want to delete this plan? This action cannot be undone.')) return;
+    
+    setLoading(true);
+    try {
+      await ispService.deletePlan(plan.id);
+      onSuccess?.();
+      onClose();
+    } catch (err) {
+      console.error('Error deleting plan:', err);
+      alert('Failed to delete plan.');
     } finally {
       setLoading(false);
     }
@@ -139,7 +155,17 @@ export function PlanModal({ isOpen, onClose, onSuccess, plan, providerId }: Plan
             </div>
           </div>
 
-          <div className="pt-4 flex items-center gap-3">
+          <div className="pt-4 flex items-center gap-2">
+            {isEdit && (
+              <button 
+                type="button"
+                onClick={handleDelete}
+                className="p-2 bg-rose-50 text-rose-600 border border-rose-200 rounded-lg hover:bg-rose-100 transition-all"
+                title="Delete Plan"
+              >
+                <Trash2 size={18} />
+              </button>
+            )}
             <button 
               type="button"
               onClick={onClose}
@@ -149,7 +175,7 @@ export function PlanModal({ isOpen, onClose, onSuccess, plan, providerId }: Plan
             </button>
             <button 
               type="submit"
-              className="flex-1 py-2 bg-[#FF6B00] text-white rounded-lg font-bold hover:bg-[#E66000] transition-all shadow-lg shadow-orange-100 flex items-center justify-center gap-2"
+              className="flex-2 py-2 bg-[#FF6B00] text-white rounded-lg font-bold hover:bg-[#E66000] transition-all shadow-lg shadow-orange-100 flex items-center justify-center gap-2"
             >
               <Save size={18} />
               {isEdit ? 'Update Plan' : 'Save Plan'}

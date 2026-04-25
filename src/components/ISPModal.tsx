@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Globe, Save, Phone, Link as LinkIcon } from 'lucide-react';
+import { X, Globe, Save, Phone, Trash2, Link as LinkIcon } from 'lucide-react';
 import { ISPProvider } from '../types';
 import { ispService } from '../services/ispService';
 import { cn } from '../lib/utils';
@@ -48,6 +48,22 @@ export function ISPModal({ isOpen, onClose, onSuccess, provider }: ISPModalProps
     } catch (err) {
       console.error('Error saving ISP:', err);
       alert('Failed to save ISP provider.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!provider || !window.confirm('Are you sure you want to delete this ISP provider? This action cannot be undone.')) return;
+    
+    setLoading(true);
+    try {
+      await ispService.deleteProvider(provider.id);
+      onSuccess?.();
+      onClose();
+    } catch (err) {
+      console.error('Error deleting ISP:', err);
+      alert('Failed to delete ISP provider.');
     } finally {
       setLoading(false);
     }
@@ -115,7 +131,17 @@ export function ISPModal({ isOpen, onClose, onSuccess, provider }: ISPModalProps
             </div>
           </div>
 
-          <div className="pt-4 flex items-center gap-3">
+          <div className="pt-4 flex items-center gap-2">
+            {isEdit && (
+              <button 
+                type="button"
+                onClick={handleDelete}
+                className="p-2 bg-rose-50 text-rose-600 border border-rose-200 rounded-lg hover:bg-rose-100 transition-all"
+                title="Delete Provider"
+              >
+                <Trash2 size={18} />
+              </button>
+            )}
             <button 
               type="button"
               onClick={onClose}
@@ -125,7 +151,7 @@ export function ISPModal({ isOpen, onClose, onSuccess, provider }: ISPModalProps
             </button>
             <button 
               type="submit"
-              className="flex-1 py-2 bg-[#007AFF] text-white rounded-lg font-bold hover:bg-[#0066CC] transition-all shadow-lg shadow-blue-100 flex items-center justify-center gap-2"
+              className="flex-2 py-2 bg-[#007AFF] text-white rounded-lg font-bold hover:bg-[#0066CC] transition-all shadow-lg shadow-blue-100 flex items-center justify-center gap-2"
             >
               <Save size={18} />
               {isEdit ? 'Update' : 'Save'}

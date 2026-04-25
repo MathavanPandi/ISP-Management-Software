@@ -19,6 +19,10 @@ export const ispService = {
     return { id, ...updates } as ISPProvider;
   },
 
+  async deleteProvider(id: string) {
+    await firestoreService.delete('providers', id);
+  },
+
   async getPlansByProvider(providerId: string) {
     return firestoreService.getAll<ISPPlan>('plans', [
       where('providerId', '==', providerId),
@@ -33,5 +37,9 @@ export const ispService = {
   async updatePlan(id: string, updates: Partial<ISPPlan>) {
     await firestoreService.update<ISPPlan>('plans', id, updates);
     return { id, ...updates } as ISPPlan;
+  },
+
+  async deletePlan(id: string) {
+    await firestoreService.delete('plans', id);
   }
 };

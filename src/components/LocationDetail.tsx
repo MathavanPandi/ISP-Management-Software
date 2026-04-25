@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -15,27 +15,102 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock,
-  Zap
+  Zap,
+  Loader2,
+  Printer
 } from 'lucide-react';
-import { MOCK_LOCATIONS, MOCK_RECHARGES, MOCK_PROVIDERS } from '../mockData';
+import { locationService } from '../services/locationService';
+import { ispService } from '../services/ispService';
+import { rechargeService } from '../services/rechargeService';
 import { cn } from '../lib/utils';
 import { AttachmentDrawer } from './AttachmentDrawer';
+import { RechargeInvoice } from './RechargeInvoice';
+import { RechargeTransaction } from '../types';
 
 export function LocationDetail() {
   const navigate = useNavigate();
   const { id } = useParams();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [location, setLocation] = useState<any>(null);
+  const [provider, setProvider] = useState<any>(null);
+  const [history, setHistory] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedTransaction, setSelectedTransaction] = useState<RechargeTransaction | null>(null);
+  const [isInvoiceOpen, setIsInvoiceOpen] = useState(false);
 
-  const location = MOCK_LOCATIONS.find(l => l.id === id);
-  const provider = MOCK_PROVIDERS.find(p => p.id === location?.ispProviderId);
-  const history = MOCK_RECHARGES.filter(r => r.locationId === id);
+  useEffect(() => {
+    if (id) {
+      fetchData();
+    }
+  }, [id]);
 
-  if (!location) {
+  const fetchData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      if (!id) return;
+      const loc = await locationService.getLocationById(id);
+      if (!loc) {
+        setError('Location not found');
+        setLoading(false);
+        return;
+      }
+      setLocation(loc);
+
+      // Fetch provider
+      if (loc.ispProviderId) {
+        try {
+          const provs = await ispService.getProviders();
+          setProvider(provs.find((p: any) => p.id === loc.ispProviderId));
+        } catch (pErr) {
+          console.error('Error fetching provider:', pErr);
+        }
+      }
+
+      // Fetch history
+      try {
+        const txns = await rechargeService.getLocationHistory(id);
+        setHistory(txns);
+      } catch (hErr) {
+        console.error('Error fetching history:', hErr);
+      }
+    } catch (err) {
+      console.error('Error fetching location data:', err);
+      setError('Could not load location details.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!id) return;
+    try {
+      setLoading(true);
+      await locationService.deleteLocation(id);
+      navigate('/locations');
+    } catch (err) {
+      console.error('Error deleting location:', err);
+      alert('Failed to delete location.');
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px]">
+        <Loader2 className="animate-spin text-[#007AFF] mb-2" size={32} />
+        <p className="text-slate-500 font-medium tracking-tight">Loading location intelligence...</p>
+      </div>
+    );
+  }
+
+  if (error || !location) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] text-slate-400">
         <AlertTriangle size={48} className="mb-4 text-amber-500" />
-        <h3 className="text-xl font-bold text-slate-900 mb-2 italic serif">Location Not Found</h3>
+        <h3 className="text-xl font-bold text-slate-900 mb-2 italic serif">{error || 'Location Not Found'}</h3>
         <p className="mb-6">The location you are looking for does not exist or has been removed.</p>
         <button 
           onClick={() => navigate('/locations')}
@@ -147,11 +222,12 @@ export function LocationDetail() {
                     <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Transaction ID</th>
                     <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Amount</th>
                     <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</th>
+                    <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {history.map((txn) => (
-                    <tr key={txn.id} className="hover:bg-slate-50/50 transition-colors">
+                    <tr key={txn.id} className="hover:bg-slate-50/50 transition-colors group">
                       <td className="px-6 py-4 text-sm font-medium text-slate-700">{txn.rechargeDate}</td>
                       <td className="px-6 py-4 text-sm text-slate-500 font-mono">{txn.transactionId}</td>
                       <td className="px-6 py-4 text-sm font-bold text-slate-900">₹{txn.total.toLocaleString('en-IN')}</td>
@@ -162,6 +238,18 @@ export function LocationDetail() {
                         )}>
                           {txn.paymentStatus}
                         </span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <button
+                          onClick={() => {
+                            setSelectedTransaction(txn);
+                            setIsInvoiceOpen(true);
+                          }}
+                          className="p-2 text-slate-400 hover:text-[#007AFF] hover:bg-[#007AFF]/5 rounded-lg transition-all"
+                          title="Print Invoice"
+                        >
+                          <Printer size={16} />
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -284,8 +372,7 @@ export function LocationDetail() {
               </button>
               <button 
                 onClick={() => {
-                  console.log('Deleting location:', id);
-                  navigate('/locations');
+                  handleDelete();
                 }}
                 className="flex-1 py-3 bg-rose-500 text-white rounded-xl font-bold hover:bg-rose-600 transition-all shadow-lg shadow-rose-200"
               >
@@ -302,6 +389,13 @@ export function LocationDetail() {
         entityType="Location"
         entityId={id || ''}
         entityName={location.name}
+      />
+
+      <RechargeInvoice 
+        isOpen={isInvoiceOpen}
+        onClose={() => setIsInvoiceOpen(false)}
+        transaction={selectedTransaction}
+        location={location}
       />
     </div>
   );

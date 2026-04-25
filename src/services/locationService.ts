@@ -48,6 +48,10 @@ export const locationService = {
     return { id, ...updates };
   },
 
+  async deleteLocation(id: string) {
+    await firestoreService.delete('locations', id);
+  },
+
   async getUrgentRenewals(limitCount = 5) {
     const userId = auth.currentUser?.uid;
     if (!userId) return [];
