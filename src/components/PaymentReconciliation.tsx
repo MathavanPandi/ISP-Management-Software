@@ -32,6 +32,8 @@ export function PaymentReconciliation() {
   const [loading, setLoading] = useState(true);
   const [systemRecords, setSystemRecords] = useState<Transaction[]>([]);
   const [gatewayRecords, setGatewayRecords] = useState<Transaction[]>([]);
+  const [matchingStatus, setMatchingStatus] = useState<string | null>(null);
+  const [openRowMenu, setOpenRowMenu] = useState<string | null>(null);
 
   React.useEffect(() => {
     fetchData();
@@ -44,23 +46,24 @@ export function PaymentReconciliation() {
       
       const records: Transaction[] = payments.map((p: any) => ({
         id: p.id,
-        date: new Date(p.payment_date).toLocaleDateString(),
+        date: new Date(p.rechargeDate).toLocaleDateString(),
         amount: Number(p.amount),
-        method: p.payment_method || 'UPI',
-        reference: p.transaction_id || 'N/A',
-        status: p.status === 'success' ? 'matched' : 'pending',
-        source: 'system'
+        method: p.paymentMode || 'UPI',
+        reference: p.bankReference || p.transactionId || 'N/A',
+        status: p.paymentStatus === 'Success' ? ('matched' as const) : ('pending' as const),
+        source: 'system' as const
       }));
 
       setSystemRecords(records);
       
-      // Simulate gateway records
+      // Simulate gateway records with some mismatches for demonstration
       const gRecords: Transaction[] = records.map((r, idx) => ({
         ...r,
         id: `GAT-${idx}`,
-        source: 'gateway',
-        amount: idx === 1 && records.length > 1 ? r.amount - 50 : r.amount,
-        status: idx === 1 && records.length > 1 ? 'mismatch' : r.status
+        source: 'gateway' as const,
+        // Create 2 mismatches for testing
+        amount: (idx === 1 || idx === 3) ? r.amount - 100 : r.amount,
+        status: (idx === 1 || idx === 3) ? ('pending' as const) : r.status
       }));
       setGatewayRecords(gRecords);
 
@@ -69,6 +72,28 @@ export function PaymentReconciliation() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleAutoMatch = () => {
+    setMatchingStatus('matching');
+    setTimeout(() => {
+      setGatewayRecords(prev => prev.map((g, idx) => {
+        const system = systemRecords[idx];
+        if (system && system.amount === g.amount && system.reference === g.reference) {
+          return { ...g, status: 'matched' as const };
+        }
+        return g;
+      }));
+      setMatchingStatus('completed');
+      setTimeout(() => setMatchingStatus(null), 2000);
+    }, 1500);
+  };
+
+  const handleSyncGateway = () => {
+    setLoading(true);
+    setTimeout(() => {
+      fetchData();
+    }, 1000);
   };
 
   if (loading) {
@@ -93,13 +118,34 @@ export function PaymentReconciliation() {
           <p className="text-sm text-slate-500">Match system records with gateway settlements to ensure financial accuracy</p>
         </div>
         <div className="flex items-center gap-2">
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg font-bold hover:bg-slate-50 transition-colors shadow-sm">
-            <RefreshCw size={18} />
-            Sync Gateway
+          <button 
+            onClick={handleSyncGateway}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg font-bold hover:bg-slate-50 transition-colors shadow-sm"
+          >
+            <RefreshCw size={18} className={cn(loading && "animate-spin")} />
+            {loading ? 'Syncing...' : 'Sync Gateway'}
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-[#007AFF] text-white rounded-lg font-bold hover:bg-[#0066CC] transition-colors shadow-sm">
-            <ArrowRightLeft size={18} />
-            Auto-Match
+          <button 
+            onClick={handleAutoMatch}
+            disabled={matchingStatus === 'matching'}
+            className="flex items-center gap-2 px-4 py-2 bg-[#007AFF] text-white rounded-lg font-bold hover:bg-[#0066CC] transition-colors shadow-sm min-w-[140px] justify-center"
+          >
+            {matchingStatus === 'matching' ? (
+              <>
+                <Loader2 size={18} className="animate-spin" />
+                Matching...
+              </>
+            ) : matchingStatus === 'completed' ? (
+              <>
+                <CheckCircle2 size={18} />
+                Match Done
+              </>
+            ) : (
+              <>
+                <ArrowRightLeft size={18} />
+                Auto-Match
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -134,7 +180,7 @@ export function PaymentReconciliation() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
         <div className="p-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
             {(['all', 'mismatch', 'pending'] as const).map((tab) => (
@@ -167,7 +213,7 @@ export function PaymentReconciliation() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-visible">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/50">
@@ -228,13 +274,35 @@ export function PaymentReconciliation() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button className="p-2 text-slate-400 hover:text-[#007AFF] hover:bg-white rounded-lg transition-all">
+                      <div className="flex items-center justify-end gap-2 relative">
+                        <button className="p-2 text-slate-400 hover:text-[#007AFF] hover:bg-white rounded-lg transition-all" title="View Details">
                           <Eye size={16} />
                         </button>
-                        <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-white rounded-lg transition-all">
-                          <MoreVertical size={16} />
-                        </button>
+                        <div className="relative">
+                          <button 
+                            onClick={() => setOpenRowMenu(openRowMenu === record.id ? null : record.id)}
+                            className={cn(
+                              "p-2 rounded-lg transition-all",
+                              openRowMenu === record.id ? "bg-slate-100 text-slate-900" : "text-slate-400 hover:text-slate-600 hover:bg-white"
+                            )}
+                          >
+                            <MoreVertical size={16} />
+                          </button>
+                          
+                          {openRowMenu === record.id && (
+                            <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl border border-slate-200 shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2">
+                              <button className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2">
+                                <ArrowRightLeft size={14} className="text-[#007AFF]" /> Manually Match
+                              </button>
+                              <button className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2 text-rose-600">
+                                <XCircle size={14} /> Mark as Bad Debt
+                              </button>
+                              <button className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2">
+                                <ExternalLink size={14} /> View Gateway Ref
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
                   </tr>

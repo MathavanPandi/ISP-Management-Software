@@ -50,6 +50,7 @@ export interface Location {
   registeredMobile: string;
   registeredEmail: string;
   loginId?: string;
+  ispProviderName?: string;
   paymentMode: string;
   autoPay: boolean;
   status: LocationStatus;

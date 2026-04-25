@@ -31,10 +31,22 @@ export function DueTracker() {
   const [selectedLocation, setSelectedLocation] = React.useState<Location | null>(null);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = React.useState(false);
   const [isBulkAlertModalOpen, setIsBulkAlertModalOpen] = React.useState(false);
+  const [alertStatus, setAlertStatus] = React.useState<{id: string, status: string} | null>(null);
 
   React.useEffect(() => {
     fetchLocations();
   }, []);
+
+  const handleSendAlert = (e: React.MouseEvent, loc: Location) => {
+    e.stopPropagation();
+    setAlertStatus({ id: loc.id, status: 'sending' });
+    
+    // Simulate API call
+    setTimeout(() => {
+      setAlertStatus({ id: loc.id, status: 'sent' });
+      setTimeout(() => setAlertStatus(null), 3000);
+    }, 1500);
+  };
 
   const fetchLocations = async () => {
     setLoading(true);
@@ -279,11 +291,23 @@ export function DueTracker() {
                       </button>
                       <div className="flex items-center gap-1">
                         <button 
-                          onClick={(e) => e.stopPropagation()}
-                          className="p-2 text-slate-400 hover:text-emerald-500 hover:bg-slate-50 rounded-lg transition-all" 
-                          title="Send WhatsApp"
+                          onClick={(e) => handleSendAlert(e, loc)}
+                          disabled={alertStatus?.id === loc.id}
+                          className={cn(
+                            "p-2 rounded-lg transition-all",
+                            alertStatus?.id === loc.id && alertStatus.status === 'sent' 
+                              ? "text-emerald-500 bg-emerald-50" 
+                              : "text-slate-400 hover:text-emerald-500 hover:bg-slate-50"
+                          )}
+                          title="Send WhatsApp Alert"
                         >
-                          <MessageSquare size={16} />
+                          {alertStatus?.id === loc.id && alertStatus.status === 'sending' ? (
+                            <Loader2 size={16} className="animate-spin" />
+                          ) : alertStatus?.id === loc.id && alertStatus.status === 'sent' ? (
+                            <CheckCircle2 size={16} />
+                          ) : (
+                            <MessageSquare size={16} />
+                          )}
                         </button>
                       </div>
                     </div>
